@@ -285,7 +285,11 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 					if val, ok := m[key]; !ok {
 						return echo.NewHTTPError(ErrBodyMissingKeyStatus, ErrBodyMissingKey)
 					} else {
-						encodedToken = val.(string)
+						strVal, ok := val.(string)
+						if !ok {
+							return echo.NewHTTPError(ErrRequestMalformedStatus, "refresh token must be a string")
+						}
+						encodedToken = strVal
 					}
 
 					c.Request().Body = io.NopCloser(bytes.NewReader(data))

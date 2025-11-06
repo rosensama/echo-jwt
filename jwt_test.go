@@ -373,6 +373,34 @@ func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 			http.StatusUnprocessableEntity,
 			ErrBodyMissingKey,
 		},
+		{
+			"refresh token not a string (number)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": 123}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
+		{
+			"refresh token not a string (boolean)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": true}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
+		{
+			"refresh token not a string (object)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": {"nested": "value"}}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
+		{
+			"refresh token not a string (array)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": ["value"]}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
 	}
 
 	for _, tc := range testCases {
