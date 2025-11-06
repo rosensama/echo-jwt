@@ -17,4 +17,4 @@
 .idea
 *.prof
 bench_output.txt
-PR_DESCRIPTION.md
+PR*.md
