@@ -131,6 +131,10 @@ type RefreshToken struct {
 	// Routes defines routes and methods that require a refresh token.
 	// Optional. Defaults to /auth/refresh [POST] and /auth/logout [POST].
 	Routes map[string][]string
+
+	// MaxBodyBytes defines the maximum request body size when reading refresh tokens.
+	// Optional. Defaults to 1048576 (1MB).
+	MaxBodyBytes int64
 }
 
 var DefaultConfig = Config{
@@ -155,6 +159,7 @@ var DefaultConfig = Config{
 			"/auth/refresh": {http.MethodPost},
 			"/auth/logout":  {http.MethodPost},
 		},
+		MaxBodyBytes: 1024 * 1024, // 1MB
 	},
 }
 
@@ -237,6 +242,10 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 		config.RefreshToken.Routes = maps.Clone(DefaultConfig.RefreshToken.Routes)
 	}
 
+	if config.RefreshToken.MaxBodyBytes == 0 {
+		config.RefreshToken.MaxBodyBytes = DefaultConfig.RefreshToken.MaxBodyBytes
+	}
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if config.Skipper(c) {
@@ -271,9 +280,13 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 						return echo.NewHTTPError(ErrRequestMalformedStatus, ErrRequestMalformed)
 					}
 
-					// there's always a body, so we don't
-					// need to handle the error.
-					data, _ := io.ReadAll(c.Request().Body)
+					// Limit body read to prevent DoS attacks.
+					// There's always a body, so we don't need to handle the error.
+					limitedReader := io.LimitReader(c.Request().Body, config.RefreshToken.MaxBodyBytes)
+					data, _ := io.ReadAll(limitedReader)
+					if int64(len(data)) >= config.RefreshToken.MaxBodyBytes {
+						return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "request body too large")
+					}
 
 					var m map[string]any
 					err := json.Unmarshal(data, &m)
