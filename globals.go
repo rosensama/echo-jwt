@@ -4,7 +4,7 @@ import (
 	"net/http"
 )
 
-var (
+const (
 	ErrAuthorizationHeader        = "authorization header malformed"
 	ErrAuthorizationHeaderStatus  = http.StatusUnauthorized
 	ErrAuthorizationScheme        = "authorization scheme not supported"
