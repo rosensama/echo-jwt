@@ -23,6 +23,6 @@ var (
 	ErrTokenInvalidStatus         = http.StatusUnauthorized
 	ErrTokenInvalidIssuedAt       = "token invalid issued at"
 	ErrTokenInvalidIssuedAtStatus = http.StatusUnauthorized
-	ErrTokenNotYetValid           = "token not yet valid"
+	ErrTokenNotYetValid           = "token not yet valid" // #nosec G101 -- false positive: this is an error message, not a credential
 	ErrTokenNotYetValidStatus     = http.StatusUnauthorized
 )
