@@ -173,6 +173,46 @@ func TestJWTWithConfig_Key_Panic(t *testing.T) {
 	assert.Panics(t, func() { e.Use(JWTWithConfig(Config{})) })
 }
 
+func TestJWT_DefaultConfig_Isolation(t *testing.T) {
+	key, err := loadPrivateKey(privateKeyPath)
+	assert.NoError(t, err)
+
+	e := echo.New()
+	e.GET("/injected", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, "ok")
+	})
+	e.Use(JWT(key))
+
+	DefaultConfig.ExemptRoutes["/injected"] = []string{http.MethodGet}
+	defer delete(DefaultConfig.ExemptRoutes, "/injected")
+
+	req := httptest.NewRequest(http.MethodGet, "/injected", nil)
+	resp := httptest.NewRecorder()
+	e.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code,
+		"JWT() instance should not see routes added to DefaultConfig after middleware was created")
+}
+
+func TestJWTWithConfig_RefreshToken_Routes_Isolation(t *testing.T) {
+	originalRoutes := make(map[string][]string)
+	for k, v := range DefaultConfig.RefreshToken.Routes {
+		originalRoutes[k] = v
+	}
+
+	key, err := loadPrivateKey(privateKeyPath)
+	assert.NoError(t, err)
+
+	_ = JWTWithConfig(Config{
+		Key:             key,
+		UseRefreshToken: true,
+		RefreshToken:    &RefreshToken{},
+	})
+
+	assert.Equal(t, originalRoutes, DefaultConfig.RefreshToken.Routes,
+		"DefaultConfig.RefreshToken.Routes should not be modified by JWTWithConfig()")
+}
+
 func TestJWTWithConfig_Skipper(t *testing.T) {
 	e := echo.New()
 
