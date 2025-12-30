@@ -3,8 +3,13 @@ package jwt
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"mime"
@@ -158,7 +163,11 @@ func JWT(key crypto.PublicKey) echo.MiddlewareFunc {
 	c.ExemptRoutes = maps.Clone(DefaultConfig.ExemptRoutes)
 	c.ExemptMethods = slices.Clone(DefaultConfig.ExemptMethods)
 	c.Key = key
-	c.Options = append(c.Options, jwt.WithKey(jwa.RS256(), key))
+	alg, err := inferAlgorithm(key)
+	if err != nil {
+		panic(fmt.Sprintf("unsupported key type: %T", key))
+	}
+	c.Options = append(slices.Clone(c.Options), jwt.WithKey(alg, key))
 	return JWTWithConfig(c)
 }
 
@@ -176,8 +185,12 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 	}
 
 	if len(config.Options) < 1 {
-		config.Options = DefaultConfig.Options
-		config.Options = append(config.Options, jwt.WithKey(jwa.RS256(), config.Key))
+		alg, err := inferAlgorithm(config.Key)
+		if err != nil {
+			panic(fmt.Sprintf("unsupported key type: %T", config.Key))
+		}
+		config.Options = slices.Clone(DefaultConfig.Options)
+		config.Options = append(config.Options, jwt.WithKey(alg, config.Key))
 	}
 
 	if config.ContextKey == "" {
@@ -392,4 +405,28 @@ func check(path string, method string, m map[string][]string) bool {
 		}
 	}
 	return false
+}
+
+// inferAlgorithm determines the appropriate JWA signature algorithm
+// based on the public key type.
+func inferAlgorithm(key crypto.PublicKey) (jwa.SignatureAlgorithm, error) {
+	switch k := key.(type) {
+	case *rsa.PublicKey:
+		return jwa.RS256(), nil
+	case *ecdsa.PublicKey:
+		switch k.Curve {
+		case elliptic.P256():
+			return jwa.ES256(), nil
+		case elliptic.P384():
+			return jwa.ES384(), nil
+		case elliptic.P521():
+			return jwa.ES512(), nil
+		default:
+			return jwa.EmptySignatureAlgorithm(), fmt.Errorf("unsupported ECDSA curve: %s", k.Curve.Params().Name)
+		}
+	case ed25519.PublicKey:
+		return jwa.EdDSA(), nil
+	default:
+		return jwa.EmptySignatureAlgorithm(), fmt.Errorf("unsupported key type: %T", key)
+	}
 }

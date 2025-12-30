@@ -2,14 +2,15 @@ package jwt
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -19,7 +20,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const privateKeyPath = "fixtures/private-key.pem"
+// testRSAPrivateKey is generated once at package init for all tests
+var testRSAPrivateKey *rsa.PrivateKey
+
+func init() {
+	var err error
+	testRSAPrivateKey, err = rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(fmt.Sprintf("failed to generate RSA key: %v", err))
+	}
+}
 
 func TestJWT_Auth_Header(t *testing.T) {
 	token, err := generateValidToken()
@@ -46,8 +56,7 @@ func TestJWT_Auth_Header(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWT(key))
 
@@ -102,8 +111,7 @@ func TestJWT_Auth_Cookie(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWT(key))
 
@@ -151,8 +159,7 @@ func TestJWT_ReturnStatus(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWT(key))
 
@@ -174,8 +181,7 @@ func TestJWTWithConfig_Key_Panic(t *testing.T) {
 }
 
 func TestJWT_DefaultConfig_Isolation(t *testing.T) {
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e := echo.New()
 	e.GET("/injected", func(c echo.Context) error {
@@ -200,8 +206,7 @@ func TestJWTWithConfig_RefreshToken_Routes_Isolation(t *testing.T) {
 		originalRoutes[k] = v
 	}
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	_ = JWTWithConfig(Config{
 		Key:             key,
@@ -220,8 +225,7 @@ func TestJWTWithConfig_Skipper(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key:     key,
@@ -243,8 +247,7 @@ func TestJWTWithConfig_RefreshToken_Defaults(t *testing.T) {
 		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key:             key,
@@ -274,8 +277,7 @@ func TestJWTWithConfig_RefreshToken_Cookie(t *testing.T) {
 		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key:             key,
@@ -309,8 +311,7 @@ func TestJWTWithConfig_RefreshToken_ContentTypeWithCharset(t *testing.T) {
 		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key:             key,
@@ -382,8 +383,7 @@ func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				Key:             key,
@@ -426,8 +426,7 @@ func TestJWTWithConfig_AfterParseFunc(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				Key:            key,
@@ -461,8 +460,7 @@ func TestJWTWithConfig_CustomParseTokenFunc(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key:            key,
@@ -492,8 +490,7 @@ func TestJWTWithConfig_CustomOptions(t *testing.T) {
 		return c.String(http.StatusOK, iss)
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key: key,
@@ -524,8 +521,7 @@ func TestJWTWithConfig_CustomOptions_InvalidIssuer(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	key, err := loadPublicKey(privateKeyPath)
-	assert.NoError(t, err)
+	key := getTestRSAPublicKey()
 
 	e.Use(JWTWithConfig(Config{
 		Key: key,
@@ -590,8 +586,7 @@ func TestJWTWithConfig_AfterParseFunc_Source(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				Key:            key,
@@ -640,8 +635,7 @@ func TestJWTWithConfig_RefreshToken_Source(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				Key:             key,
@@ -699,8 +693,7 @@ func TestJWTWithConfig_ExemptMethods(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				ExemptMethods: tc.methods,
@@ -737,8 +730,7 @@ func TestJWTWithConfig_ExemptRoutes_WildcardMethod(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				ExemptRoutes: map[string][]string{
@@ -779,8 +771,7 @@ func TestJWTWithConfig_ExemptRoutes(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				ExemptRoutes: map[string][]string{
@@ -817,8 +808,7 @@ func TestJWTWithConfig_OptionalRoutes(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWTWithConfig(Config{
 				OptionalRoutes: tc.routes,
@@ -858,8 +848,7 @@ func TestJWT_Route_Not_Found(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPublicKey(privateKeyPath)
-			assert.NoError(t, err)
+			key := getTestRSAPublicKey()
 
 			e.Use(JWT(key))
 
@@ -871,6 +860,108 @@ func TestJWT_Route_Not_Found(t *testing.T) {
 			assert.Equal(t, tc.statusCode, resp.Code)
 		})
 	}
+}
+
+func TestJWT_AlgorithmInference(t *testing.T) {
+	// Helper to generate key pairs for each algorithm type
+	type keyPairGenerator func() (privateKey any, publicKey crypto.PublicKey, err error)
+
+	testCases := []struct {
+		name         string
+		generateKeys keyPairGenerator
+		algorithm    jwa.SignatureAlgorithm
+	}{
+		{
+			name: "RSA",
+			generateKeys: func() (any, crypto.PublicKey, error) {
+				return getTestRSAPrivateKey(), getTestRSAPublicKey(), nil
+			},
+			algorithm: jwa.RS256(),
+		},
+		{
+			name: "ECDSA_P256",
+			generateKeys: func() (any, crypto.PublicKey, error) {
+				priv, pub, err := generateECDSAKeyPair(elliptic.P256())
+				return priv, pub, err
+			},
+			algorithm: jwa.ES256(),
+		},
+		{
+			name: "ECDSA_P384",
+			generateKeys: func() (any, crypto.PublicKey, error) {
+				priv, pub, err := generateECDSAKeyPair(elliptic.P384())
+				return priv, pub, err
+			},
+			algorithm: jwa.ES384(),
+		},
+		{
+			name: "ECDSA_P521",
+			generateKeys: func() (any, crypto.PublicKey, error) {
+				priv, pub, err := generateECDSAKeyPair(elliptic.P521())
+				return priv, pub, err
+			},
+			algorithm: jwa.ES512(),
+		},
+		{
+			name: "Ed25519",
+			generateKeys: func() (any, crypto.PublicKey, error) {
+				priv, pub, err := generateEd25519KeyPair()
+				return priv, pub, err
+			},
+			algorithm: jwa.EdDSA(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			privateKey, publicKey, err := tc.generateKeys()
+			assert.NoError(t, err)
+
+			token, err := generateTokenWithKey(tc.algorithm, privateKey)
+			assert.NoError(t, err)
+
+			e := echo.New()
+			e.GET("/", func(c echo.Context) error {
+				return c.JSON(http.StatusOK, "ok")
+			})
+
+			e.Use(JWT(publicKey))
+
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+			resp := httptest.NewRecorder()
+
+			e.ServeHTTP(resp, req)
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+		})
+	}
+}
+
+func TestJWTWithConfig_AlgorithmInference(t *testing.T) {
+	// Test that JWTWithConfig also infers the algorithm when Options is empty
+	privateKey, publicKey, err := generateECDSAKeyPair(elliptic.P256())
+	assert.NoError(t, err)
+
+	token, err := generateTokenWithKey(jwa.ES256(), privateKey)
+	assert.NoError(t, err)
+
+	e := echo.New()
+	e.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, "ok")
+	})
+
+	e.Use(JWTWithConfig(Config{
+		Key: publicKey,
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+	resp := httptest.NewRecorder()
+
+	e.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
 }
 
 func generateValidToken() ([]byte, error) {
@@ -894,10 +985,7 @@ func generateInvalidIssuedAt() ([]byte, error) {
 }
 
 func generateToken(iat time.Time, nbf time.Time, exp time.Time) ([]byte, error) {
-	key, err := loadPrivateKey(privateKeyPath)
-	if err != nil {
-		return nil, err
-	}
+	key := getTestRSAPrivateKey()
 
 	builder := jwt.NewBuilder().
 		Subject("123").
@@ -919,34 +1007,48 @@ func generateToken(iat time.Time, nbf time.Time, exp time.Time) ([]byte, error) 
 	return signed, nil
 }
 
-func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-
-	block, _ := pem.Decode(b)
-	if block == nil {
-		return nil, fmt.Errorf("failed to parse PEM block: %v", err)
-	}
-
-	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-
-	return key, nil
+func getTestRSAPrivateKey() *rsa.PrivateKey {
+	return testRSAPrivateKey
 }
 
-func loadPublicKey(path string) (*rsa.PublicKey, error) {
-	privateKey, err := loadPrivateKey(path)
+func getTestRSAPublicKey() *rsa.PublicKey {
+	return &testRSAPrivateKey.PublicKey
+}
+
+func generateECDSAKeyPair(curve elliptic.Curve) (*ecdsa.PrivateKey, *ecdsa.PublicKey, error) {
+	privateKey, err := ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	return privateKey, &privateKey.PublicKey, nil
+}
+
+func generateEd25519KeyPair() (ed25519.PrivateKey, ed25519.PublicKey, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	return privateKey, publicKey, nil
+}
+
+func generateTokenWithKey(alg jwa.SignatureAlgorithm, key any) ([]byte, error) {
+	t := time.Now()
+	builder := jwt.NewBuilder().
+		Subject("123").
+		Issuer("test").
+		IssuedAt(t).
+		NotBefore(t).
+		Expiration(t.Add(time.Minute * 10))
+
+	token, err := builder.Build()
 	if err != nil {
 		return nil, err
 	}
-	return &privateKey.PublicKey, nil
+
+	signed, err := jwt.Sign(token, jwt.WithKey(alg, key))
+	if err != nil {
+		return nil, err
+	}
+
+	return signed, nil
 }
