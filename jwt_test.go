@@ -445,6 +445,71 @@ func TestJWTWithConfig_CustomParseTokenFunc(t *testing.T) {
 	assert.True(t, customParseCalled, "custom ParseTokenFunc should have been called")
 }
 
+func TestJWTWithConfig_CustomOptions(t *testing.T) {
+	e := echo.New()
+
+	e.GET("/", func(c echo.Context) error {
+		token := c.Get("token").(jwt.Token)
+		iss, _ := token.Issuer()
+		return c.String(http.StatusOK, iss)
+	})
+
+	key, err := loadPrivateKey(privateKeyPath)
+	assert.NoError(t, err)
+
+	e.Use(JWTWithConfig(Config{
+		Key: key,
+		Options: []jwt.ParseOption{
+			jwt.WithKey(jwa.RS256(), key),
+			jwt.WithValidate(true),
+			jwt.WithIssuer("test"),
+		},
+	}))
+
+	token, err := generateValidToken()
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+	resp := httptest.NewRecorder()
+
+	e.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, "test", resp.Body.String())
+}
+
+func TestJWTWithConfig_CustomOptions_InvalidIssuer(t *testing.T) {
+	e := echo.New()
+
+	e.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, "ok")
+	})
+
+	key, err := loadPrivateKey(privateKeyPath)
+	assert.NoError(t, err)
+
+	e.Use(JWTWithConfig(Config{
+		Key: key,
+		Options: []jwt.ParseOption{
+			jwt.WithKey(jwa.RS256(), key),
+			jwt.WithValidate(true),
+			jwt.WithIssuer("wrong-issuer"),
+		},
+	}))
+
+	token, err := generateValidToken()
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+	resp := httptest.NewRecorder()
+
+	e.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code)
+}
+
 func afterParseHeader(_ echo.Context, _ jwt.Token, _ string, src TokenSource) *echo.HTTPError {
 	if src.String() == Header.String() {
 		return nil
