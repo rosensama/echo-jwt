@@ -1,4 +1,4 @@
-module github.com/alexferl/echo-jwt
+module github.com/rosensama/echo-jwt
 
 go 1.24.0
 
