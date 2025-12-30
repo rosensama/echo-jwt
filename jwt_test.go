@@ -395,6 +395,14 @@ func afterParseCookie(_ echo.Context, _ jwt.Token, _ string, src TokenSource) *e
 	return &echo.HTTPError{Code: http.StatusInternalServerError}
 }
 
+func afterParseBody(_ echo.Context, _ jwt.Token, _ string, src TokenSource) *echo.HTTPError {
+	if src == Body {
+		return nil
+	}
+
+	return &echo.HTTPError{Code: http.StatusInternalServerError}
+}
+
 func TestJWTWithConfig_AfterParseFunc_Source(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -434,6 +442,60 @@ func TestJWTWithConfig_AfterParseFunc_Source(t *testing.T) {
 			if tc.source == Header {
 				req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 			} else {
+				req.AddCookie(cookie)
+			}
+			resp := httptest.NewRecorder()
+
+			e.ServeHTTP(resp, req)
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+		})
+	}
+}
+
+func TestJWTWithConfig_RefreshToken_Source(t *testing.T) {
+	testCases := []struct {
+		name   string
+		source TokenSource
+		fn     func(echo.Context, jwt.Token, string, TokenSource) *echo.HTTPError
+	}{
+		{"body source", Body, afterParseBody},
+		{"cookie source", Cookie, afterParseCookie},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := echo.New()
+
+			e.POST("/auth/refresh", func(c echo.Context) error {
+				return c.JSON(http.StatusOK, "ok")
+			})
+
+			key, err := loadPrivateKey(privateKeyPath)
+			assert.NoError(t, err)
+
+			e.Use(JWTWithConfig(Config{
+				Key:             key,
+				UseRefreshToken: true,
+				RefreshToken:    &RefreshToken{},
+				AfterParseFunc:  tc.fn,
+			}))
+
+			token, err := generateValidToken()
+			assert.NoError(t, err)
+
+			var req *http.Request
+			if tc.source == Body {
+				body := fmt.Sprintf(`{"refresh_token": "%s"}`, token)
+				req = httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewBuffer([]byte(body)))
+				req.Header.Add("Content-Type", echo.MIMEApplicationJSON)
+			} else {
+				req = httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+				cookie := &http.Cookie{
+					Name:  "refresh_token",
+					Value: string(token),
+					Path:  "/",
+				}
 				req.AddCookie(cookie)
 			}
 			resp := httptest.NewRecorder()
