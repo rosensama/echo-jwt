@@ -576,6 +576,43 @@ func TestJWTWithConfig_ExemptMethods(t *testing.T) {
 	}
 }
 
+func TestJWTWithConfig_ExemptRoutes_WildcardMethod(t *testing.T) {
+	testCases := []struct {
+		name   string
+		method string
+	}{
+		{"GET", http.MethodGet},
+		{"POST", http.MethodPost},
+		{"PUT", http.MethodPut},
+		{"DELETE", http.MethodDelete},
+		{"PATCH", http.MethodPatch},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := echo.New()
+
+			e.Any("/wildcard", func(c echo.Context) error {
+				return c.JSON(http.StatusOK, "ok")
+			})
+
+			e.Use(JWTWithConfig(Config{
+				ExemptRoutes: map[string][]string{
+					"/wildcard": {"*"},
+				},
+				Key: "key",
+			}))
+
+			req := httptest.NewRequest(tc.method, "/wildcard", nil)
+			resp := httptest.NewRecorder()
+
+			e.ServeHTTP(resp, req)
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+		})
+	}
+}
+
 func TestJWTWithConfig_ExemptRoutes(t *testing.T) {
 	testCases := []struct {
 		name       string
