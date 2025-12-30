@@ -410,6 +410,41 @@ func TestJWTWithConfig_AfterParseFunc(t *testing.T) {
 	}
 }
 
+func TestJWTWithConfig_CustomParseTokenFunc(t *testing.T) {
+	customParseCalled := false
+	customParseFunc := func(encodedToken string, options []jwt.ParseOption) (jwt.Token, error) {
+		customParseCalled = true
+		return jwt.Parse([]byte(encodedToken), options...)
+	}
+
+	e := echo.New()
+
+	e.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, "ok")
+	})
+
+	key, err := loadPrivateKey(privateKeyPath)
+	assert.NoError(t, err)
+
+	e.Use(JWTWithConfig(Config{
+		Key:            key,
+		ParseTokenFunc: customParseFunc,
+		Options:        []jwt.ParseOption{jwt.WithKey(jwa.RS256(), key), jwt.WithValidate(true)},
+	}))
+
+	token, err := generateValidToken()
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+	resp := httptest.NewRecorder()
+
+	e.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.True(t, customParseCalled, "custom ParseTokenFunc should have been called")
+}
+
 func afterParseHeader(_ echo.Context, _ jwt.Token, _ string, src TokenSource) *echo.HTTPError {
 	if src.String() == Header.String() {
 		return nil
