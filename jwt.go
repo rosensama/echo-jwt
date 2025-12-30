@@ -24,10 +24,11 @@ const (
 	Unset TokenSource = iota
 	Cookie
 	Header
+	Body
 )
 
 func (s TokenSource) String() string {
-	return [...]string{"unset", "cookie", "header"}[s]
+	return [...]string{"unset", "cookie", "header", "body"}[s]
 }
 
 type Config struct {
@@ -246,7 +247,9 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 			if config.UseRefreshToken && check(path, method, config.RefreshToken.Routes) {
 				refreshRoute = true
 				encodedToken = encodedTokenFromCookie(c, config.RefreshToken.CookieKey)
-				if encodedToken == "" {
+				if encodedToken != "" {
+					tokenSource = Cookie
+				} else {
 					if c.Request().Header.Get("Content-Type") != config.RefreshToken.BodyMIMEType {
 						return echo.NewHTTPError(ErrRequestMalformedStatus, ErrRequestMalformed)
 					}
@@ -269,6 +272,7 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 					}
 
 					c.Request().Body = io.NopCloser(bytes.NewReader(data))
+					tokenSource = Body
 				}
 			} else {
 				encodedToken = encodedTokenFromCookie(c, config.CookieKey)
