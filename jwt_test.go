@@ -32,7 +32,7 @@ func init() {
 }
 
 func TestJWT_Auth_Header(t *testing.T) {
-	token, err := generateValidToken(t)
+	token, err := generateValidToken()
 	assert.NoError(t, err)
 
 	testCases := []struct {
@@ -72,7 +72,7 @@ func TestJWT_Auth_Header(t *testing.T) {
 }
 
 func TestJWT_Auth_Cookie(t *testing.T) {
-	token, err := generateValidToken(t)
+	token, err := generateValidToken()
 	assert.NoError(t, err)
 
 	validCookie := &http.Cookie{
@@ -127,16 +127,16 @@ func TestJWT_Auth_Cookie(t *testing.T) {
 }
 
 func TestJWT_ReturnStatus(t *testing.T) {
-	token, err := generateValidToken(t)
+	token, err := generateValidToken()
 	assert.NoError(t, err)
 
-	expToken, err := generateExpiredToken(t)
+	expToken, err := generateExpiredToken()
 	assert.NoError(t, err)
 
-	nbfToken, err := generateFutureNotBefore(t)
+	nbfToken, err := generateFutureNotBefore()
 	assert.NoError(t, err)
 
-	iatToken, err := generateInvalidIssuedAt(t)
+	iatToken, err := generateInvalidIssuedAt()
 	assert.NoError(t, err)
 
 	testCases := []struct {
@@ -255,7 +255,7 @@ func TestJWTWithConfig_RefreshToken_Defaults(t *testing.T) {
 		RefreshToken:    &RefreshToken{},
 	}))
 
-	token, err := generateValidToken(t)
+	token, err := generateValidToken()
 	assert.NoError(t, err)
 
 	b := fmt.Sprintf(`{"refresh_token": "%s"}`, token)
@@ -335,7 +335,7 @@ func TestJWTWithConfig_RefreshToken_ContentTypeWithCharset(t *testing.T) {
 }
 
 func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
-	token, err := generateValidToken(t)
+	token, err := generateValidToken()
 	assert.NoError(t, err)
 
 	testCases := []struct {
@@ -432,7 +432,7 @@ func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 }
 
 func TestJWTWithConfig_RefreshToken_MaxBodyBytes(t *testing.T) {
-	token, err := generateValidToken(t)
+	token, err := generateValidToken()
 	assert.NoError(t, err)
 
 	testCases := []struct {
@@ -480,7 +480,7 @@ func TestJWTWithConfig_RefreshToken_MaxBodyBytes(t *testing.T) {
 				return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 			})
 
-			key, err := loadPrivateKey(t, privateKeyPath)
+			key := getTestRSAPublicKey()
 			assert.NoError(t, err)
 
 			e.Use(JWTWithConfig(Config{
@@ -541,7 +541,7 @@ func TestJWTWithConfig_AfterParseFunc(t *testing.T) {
 				AfterParseFunc: tc.fn,
 			}))
 
-			token, err := generateValidToken(t)
+			token, err := generateValidToken()
 			assert.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -701,7 +701,7 @@ func TestJWTWithConfig_AfterParseFunc_Source(t *testing.T) {
 				AfterParseFunc: tc.fn,
 			}))
 
-			token, err := generateValidToken(t)
+			token, err := generateValidToken()
 			assert.NoError(t, err)
 
 			cookie := &http.Cookie{
@@ -923,7 +923,7 @@ func TestJWTWithConfig_OptionalRoutes(t *testing.T) {
 				Key:            key,
 			}))
 
-			token, err := generateExpiredToken(t)
+			token, err := generateExpiredToken()
 			assert.NoError(t, err)
 
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -1077,19 +1077,19 @@ func generateValidToken() ([]byte, error) {
 	return generateToken(t, t, t.Add(time.Minute*10))
 }
 
-func generateExpiredToken(t *testing.T) ([]byte, error) {
+func generateExpiredToken() ([]byte, error) {
 	now := time.Now().Add(-time.Minute * 10)
-	return generateToken(t, now, now, now)
+	return generateToken(now, now, now)
 }
 
-func generateFutureNotBefore(t *testing.T) ([]byte, error) {
+func generateFutureNotBefore() ([]byte, error) {
 	now := time.Now()
-	return generateToken(t, now, now.Add(time.Minute*10), now.Add(time.Minute*9))
+	return generateToken(now, now.Add(time.Minute*10), now.Add(time.Minute*9))
 }
 
-func generateInvalidIssuedAt(t *testing.T) ([]byte, error) {
+func generateInvalidIssuedAt() ([]byte, error) {
 	now := time.Now()
-	return generateToken(t, now.Add(time.Minute*10), now, now)
+	return generateToken(now.Add(time.Minute*10), now, now)
 }
 
 func generateToken(iat time.Time, nbf time.Time, exp time.Time) ([]byte, error) {
