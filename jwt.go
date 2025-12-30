@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -149,8 +151,8 @@ var DefaultConfig = Config{
 
 func JWT(key any) echo.MiddlewareFunc {
 	c := DefaultConfig
-	c.ExemptRoutes = DefaultConfig.ExemptRoutes
-	c.ExemptMethods = DefaultConfig.ExemptMethods
+	c.ExemptRoutes = maps.Clone(DefaultConfig.ExemptRoutes)
+	c.ExemptMethods = slices.Clone(DefaultConfig.ExemptMethods)
 	c.Key = key
 	c.Options = append(c.Options, jwt.WithKey(jwa.RS256(), key))
 	return JWTWithConfig(c)
@@ -215,7 +217,7 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 	}
 
 	if len(config.RefreshToken.Routes) < 1 {
-		config.RefreshToken.Routes = DefaultConfig.RefreshToken.Routes
+		config.RefreshToken.Routes = maps.Clone(DefaultConfig.RefreshToken.Routes)
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
