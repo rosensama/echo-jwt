@@ -46,7 +46,7 @@ func TestJWT_Auth_Header(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWT(key))
@@ -102,7 +102,7 @@ func TestJWT_Auth_Cookie(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWT(key))
@@ -151,7 +151,7 @@ func TestJWT_ReturnStatus(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWT(key))
@@ -174,7 +174,7 @@ func TestJWTWithConfig_Key_Panic(t *testing.T) {
 }
 
 func TestJWT_DefaultConfig_Isolation(t *testing.T) {
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e := echo.New()
@@ -200,7 +200,7 @@ func TestJWTWithConfig_RefreshToken_Routes_Isolation(t *testing.T) {
 		originalRoutes[k] = v
 	}
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	_ = JWTWithConfig(Config{
@@ -220,8 +220,11 @@ func TestJWTWithConfig_Skipper(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
+	key, err := loadPublicKey(privateKeyPath)
+	assert.NoError(t, err)
+
 	e.Use(JWTWithConfig(Config{
-		Key:     "key",
+		Key:     key,
 		Skipper: func(c echo.Context) bool { return true },
 	}))
 
@@ -240,7 +243,7 @@ func TestJWTWithConfig_RefreshToken_Defaults(t *testing.T) {
 		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 	})
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e.Use(JWTWithConfig(Config{
@@ -271,7 +274,7 @@ func TestJWTWithConfig_RefreshToken_Cookie(t *testing.T) {
 		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 	})
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e.Use(JWTWithConfig(Config{
@@ -306,7 +309,7 @@ func TestJWTWithConfig_RefreshToken_ContentTypeWithCharset(t *testing.T) {
 		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
 	})
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e.Use(JWTWithConfig(Config{
@@ -379,7 +382,7 @@ func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWTWithConfig(Config{
@@ -423,7 +426,7 @@ func TestJWTWithConfig_AfterParseFunc(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWTWithConfig(Config{
@@ -458,7 +461,7 @@ func TestJWTWithConfig_CustomParseTokenFunc(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e.Use(JWTWithConfig(Config{
@@ -489,7 +492,7 @@ func TestJWTWithConfig_CustomOptions(t *testing.T) {
 		return c.String(http.StatusOK, iss)
 	})
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e.Use(JWTWithConfig(Config{
@@ -521,7 +524,7 @@ func TestJWTWithConfig_CustomOptions_InvalidIssuer(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	key, err := loadPrivateKey(privateKeyPath)
+	key, err := loadPublicKey(privateKeyPath)
 	assert.NoError(t, err)
 
 	e.Use(JWTWithConfig(Config{
@@ -587,7 +590,7 @@ func TestJWTWithConfig_AfterParseFunc_Source(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWTWithConfig(Config{
@@ -637,7 +640,7 @@ func TestJWTWithConfig_RefreshToken_Source(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWTWithConfig(Config{
@@ -696,9 +699,12 @@ func TestJWTWithConfig_ExemptMethods(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
+			key, err := loadPublicKey(privateKeyPath)
+			assert.NoError(t, err)
+
 			e.Use(JWTWithConfig(Config{
 				ExemptMethods: tc.methods,
-				Key:           "key",
+				Key:           key,
 			}))
 
 			req := httptest.NewRequest(tc.methods[0], "/", nil)
@@ -731,11 +737,14 @@ func TestJWTWithConfig_ExemptRoutes_WildcardMethod(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
+			key, err := loadPublicKey(privateKeyPath)
+			assert.NoError(t, err)
+
 			e.Use(JWTWithConfig(Config{
 				ExemptRoutes: map[string][]string{
 					"/wildcard": {"*"},
 				},
-				Key: "key",
+				Key: key,
 			}))
 
 			req := httptest.NewRequest(tc.method, "/wildcard", nil)
@@ -770,11 +779,14 @@ func TestJWTWithConfig_ExemptRoutes(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
+			key, err := loadPublicKey(privateKeyPath)
+			assert.NoError(t, err)
+
 			e.Use(JWTWithConfig(Config{
 				ExemptRoutes: map[string][]string{
 					tc.route: {http.MethodGet},
 				},
-				Key: "key",
+				Key: key,
 			}))
 
 			req := httptest.NewRequest(http.MethodGet, tc.route, nil)
@@ -805,7 +817,7 @@ func TestJWTWithConfig_OptionalRoutes(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWTWithConfig(Config{
@@ -846,7 +858,7 @@ func TestJWT_Route_Not_Found(t *testing.T) {
 				return c.JSON(http.StatusOK, "ok")
 			})
 
-			key, err := loadPrivateKey(privateKeyPath)
+			key, err := loadPublicKey(privateKeyPath)
 			assert.NoError(t, err)
 
 			e.Use(JWT(key))
@@ -929,4 +941,12 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	}
 
 	return key, nil
+}
+
+func loadPublicKey(path string) (*rsa.PublicKey, error) {
+	privateKey, err := loadPrivateKey(path)
+	if err != nil {
+		return nil, err
+	}
+	return &privateKey.PublicKey, nil
 }

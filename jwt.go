@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"bytes"
+	"crypto"
 	"encoding/json"
 	"errors"
 	"io"
@@ -36,9 +37,10 @@ type Config struct {
 	// Skipper defines a function to skip middleware.
 	Skipper middleware.Skipper
 
-	// Key defines the RSA key used to verify tokens.
+	// Key defines the public key used to verify tokens.
+	// Must be a crypto.PublicKey (e.g., *rsa.PublicKey, *ecdsa.PublicKey).
 	// Required.
-	Key any
+	Key crypto.PublicKey
 
 	// ExemptRoutes defines routes and methods that don't require tokens.
 	// Optional. Defaults to /login [POST].
@@ -151,7 +153,7 @@ var DefaultConfig = Config{
 	},
 }
 
-func JWT(key any) echo.MiddlewareFunc {
+func JWT(key crypto.PublicKey) echo.MiddlewareFunc {
 	c := DefaultConfig
 	c.ExemptRoutes = maps.Clone(DefaultConfig.ExemptRoutes)
 	c.ExemptMethods = slices.Clone(DefaultConfig.ExemptMethods)
