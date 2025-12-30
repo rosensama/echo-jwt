@@ -373,6 +373,34 @@ func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 			http.StatusUnprocessableEntity,
 			ErrBodyMissingKey,
 		},
+		{
+			"refresh token not a string (number)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": 123}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
+		{
+			"refresh token not a string (boolean)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": true}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
+		{
+			"refresh token not a string (object)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": {"nested": "value"}}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
+		{
+			"refresh token not a string (array)",
+			echo.MIMEApplicationJSON,
+			bytes.NewBuffer([]byte(`{"refresh_token": ["value"]}`)),
+			http.StatusBadRequest,
+			"refresh token must be a string",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -399,6 +427,86 @@ func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 
 			assert.Equal(t, tc.statusCode, resp.Code)
 			assert.Contains(t, resp.Body.String(), tc.msg)
+		})
+	}
+}
+
+func TestJWTWithConfig_RefreshToken_MaxBodyBytes(t *testing.T) {
+	token, err := generateValidToken()
+	assert.NoError(t, err)
+
+	testCases := []struct {
+		name         string
+		maxBodyBytes int64
+		bodySize     int
+		statusCode   int
+		msg          string
+	}{
+		{
+			"within limit",
+			1024,
+			500,
+			http.StatusOK,
+			"",
+		},
+		{
+			"exactly at limit",
+			1024,
+			1024,
+			http.StatusRequestEntityTooLarge,
+			"request body too large",
+		},
+		{
+			"exceeds limit",
+			1024,
+			2048,
+			http.StatusRequestEntityTooLarge,
+			"request body too large",
+		},
+		{
+			"small limit",
+			100,
+			200,
+			http.StatusRequestEntityTooLarge,
+			"request body too large",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := echo.New()
+
+			e.POST("/auth/refresh", func(c echo.Context) error {
+				return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
+			})
+
+			key := getTestRSAPublicKey()
+			assert.NoError(t, err)
+
+			e.Use(JWTWithConfig(Config{
+				Key:             key,
+				UseRefreshToken: true,
+				RefreshToken: &RefreshToken{
+					MaxBodyBytes: tc.maxBodyBytes,
+				},
+			}))
+
+			padding := ""
+			if tc.bodySize > len(token)+30 {
+				padding = string(make([]byte, tc.bodySize-len(token)-30))
+			}
+			body := fmt.Sprintf(`{"refresh_token": "%s", "padding": "%s"}`, token, padding)
+
+			req := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewBuffer([]byte(body)))
+			req.Header.Add("Content-Type", echo.MIMEApplicationJSON)
+			resp := httptest.NewRecorder()
+
+			e.ServeHTTP(resp, req)
+
+			assert.Equal(t, tc.statusCode, resp.Code)
+			if tc.msg != "" {
+				assert.Contains(t, resp.Body.String(), tc.msg)
+			}
 		})
 	}
 }
@@ -970,18 +1078,18 @@ func generateValidToken() ([]byte, error) {
 }
 
 func generateExpiredToken() ([]byte, error) {
-	t := time.Now().Add(-time.Minute * 10)
-	return generateToken(t, t, t)
+	now := time.Now().Add(-time.Minute * 10)
+	return generateToken(now, now, now)
 }
 
 func generateFutureNotBefore() ([]byte, error) {
-	t := time.Now()
-	return generateToken(t, t.Add(time.Minute*10), t.Add(time.Minute*9))
+	now := time.Now()
+	return generateToken(now, now.Add(time.Minute*10), now.Add(time.Minute*9))
 }
 
 func generateInvalidIssuedAt() ([]byte, error) {
-	t := time.Now()
-	return generateToken(t.Add(time.Minute*10), t, t)
+	now := time.Now()
+	return generateToken(now.Add(time.Minute*10), now, now)
 }
 
 func generateToken(iat time.Time, nbf time.Time, exp time.Time) ([]byte, error) {
