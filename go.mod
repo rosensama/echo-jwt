@@ -1,4 +1,4 @@
-module github.com/rosensama/echo-jwt
+module github.com/rosensama/echo-jwt/v3
 
 go 1.24.0
 
