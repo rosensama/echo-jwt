@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"maps"
+	"mime"
 	"net/http"
 	"slices"
 	"strings"
@@ -250,7 +251,8 @@ func JWTWithConfig(config Config) echo.MiddlewareFunc {
 				if encodedToken != "" {
 					tokenSource = Cookie
 				} else {
-					if c.Request().Header.Get("Content-Type") != config.RefreshToken.BodyMIMEType {
+					mediaType, _, _ := mime.ParseMediaType(c.Request().Header.Get("Content-Type"))
+					if mediaType != config.RefreshToken.BodyMIMEType {
 						return echo.NewHTTPError(ErrRequestMalformedStatus, ErrRequestMalformed)
 					}
 

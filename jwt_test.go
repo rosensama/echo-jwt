@@ -264,6 +264,37 @@ func TestJWTWithConfig_RefreshToken_Defaults(t *testing.T) {
 	assert.Equal(t, string(token), resp.Body.String())
 }
 
+func TestJWTWithConfig_RefreshToken_ContentTypeWithCharset(t *testing.T) {
+	e := echo.New()
+
+	e.POST("/auth/refresh", func(c echo.Context) error {
+		return c.String(http.StatusOK, c.Get(DefaultConfig.RefreshToken.ContextKeyEncoded).(string))
+	})
+
+	key, err := loadPrivateKey(privateKeyPath)
+	assert.NoError(t, err)
+
+	e.Use(JWTWithConfig(Config{
+		Key:             key,
+		UseRefreshToken: true,
+		RefreshToken:    &RefreshToken{},
+	}))
+
+	token, err := generateValidToken()
+	assert.NoError(t, err)
+
+	b := fmt.Sprintf(`{"refresh_token": "%s"}`, token)
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewBuffer([]byte(b)))
+	req.Header.Add("Content-Type", "application/json; charset=utf-8")
+	resp := httptest.NewRecorder()
+
+	e.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, string(token), resp.Body.String())
+}
+
 func TestJWTWithConfig_RefreshToken_Malformed(t *testing.T) {
 	token, err := generateValidToken()
 	assert.NoError(t, err)
